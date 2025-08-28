@@ -114,7 +114,7 @@ def TryExit():
 			MenuFileSave()
 			TryExit()
 			return
-	exit()
+	sys.exit()
 
 def LaunchGame():
 	MenuFileSave()
