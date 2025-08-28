@@ -4,8 +4,10 @@ import FlowlabModdingUtils as FMU
 import tkinter as tk
 
 from typing import Optional, Literal
+from datetime import datetime, timezone
 from tkinter import messagebox
 from hashlib import md5
+from PIL import Image
 
 GUID = "com.rezarg.flowlabmoddingutils"
 NAME = "Flowlab Modding Utility"
@@ -226,6 +228,10 @@ def EditEntityClass(entityClass: dict):
 	editSprite.pack(side="top", anchor="w", pady=5)
 	EditView_Widgets.append(editSprite)
 
+	deleteEntityClass = tk.Button(EditView, text="⚠ Delete Entity Class", command=lambda EC=entityClass: DeleteEntityClass(EC))
+	deleteEntityClass.pack(side="top", anchor="w", pady=(10, 0))
+	EditView_Widgets.append(deleteEntityClass)
+
 def CreateNewLevel():
 	levelId = int(time.time())
 
@@ -275,7 +281,104 @@ def DeleteLevel(level: dict):
 	ClearEditView()
 
 def CreateNewEntityClass():
-	MenuCommandNotImplemented()
+	entityClassId = int(time.time())
+
+	timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+	entityClass = {
+				"aabb_h": 32,
+				"aabb_w": 32,
+				"aabb_x": 0,
+				"aabb_y": 0,
+				"assets_count": 1, # I have no idea what causes these numbers to be 0 or 2 so I'm just gonna default to 1 since it's the most common.
+				"behaviors_count": 1, # I have no idea what causes these numbers to be 0 or 2 so I'm just gonna default to 1 since it's the most common.
+				"bg": False,
+				"collider": "rectangle",
+				"collides": True,
+				"collisionFilter": 0,
+				"collision_group": 1,
+				"cols": 1,
+				"created_at": None,
+				"csx": "1.0",
+				"csy": "1.0",
+				"cverts": None,
+				"density": 1.0,
+				"forked_from": 0, # I have no idea what this value represents.
+				"forward": "right",
+				"friction": 0.5,
+				"game_id": AssetManager.GameInfo["id"],
+				"gravity": True,
+				"group_id": None,
+				"id": entityClassId,
+				"layer": 1,
+				"linear_damping": None,
+				"moves": True,
+				"name": f"Entity Class {entityClassId}",
+				"parent": 0,
+				"persistence": "none",
+				"physics_rot": False,
+				"replication_policy": 0,
+				"restitution": 0.0,
+				"rows": 1,
+				"solid": True,
+				"sprite_version": 4,
+				"ui": False,
+				"updated_at": timestamp,
+				"version": 1}
+
+	AssetManager.GameInfo["entity_classes"].append(entityClass)
+
+	entityBehaviorPathName = API_BEHAVIOR_FOR_ENTITY % entityClassId
+	entityBehaviorPathName = md5(str.encode(entityBehaviorPathName)).hexdigest()
+
+	with open(f"{AssetManager.rootPath}/assets/{entityBehaviorPathName}.json", "w") as f:
+		json.dump([], f)
+
+	AssetManager.AddFile(f"assets/{entityBehaviorPathName}.json")
+
+	entitySpritePath = API_SPRITE_FOR_ENTITY % (AssetManager.GameInfo["user_id"], AssetManager.GameInfo["id"], entityClass["id"])
+	entitySpritePath = f"assets/{md5(str.encode(entitySpritePath)).hexdigest()}.png"
+
+	img = Image.new("RGBA", (32, 32))
+
+	for x in range(32): # TODO: Update this to make it resemble the default Flowlab sprite instead.
+		for y in range(32):
+			if x % 2 == 0 or y % 2 == 0:
+				img.putpixel((x, y), (255, 255, 255, 255))
+			else:
+				img.putpixel((x, y), (0, 0, 0, 255))
+	
+	with open(f"{AssetManager.rootPath}/{entitySpritePath}", "wb") as f:
+		img.save(f, "png")
+
+	AssetManager.AddFile(entitySpritePath)
+
+	SetDirty()
+	LoadAssetViewEntityClasses()
+	EditEntityClass(entityClass)
+
+def DeleteEntityClass(entityClass: dict):
+	confirm = messagebox.askyesno("Delete Entity Class", f"Are you sure you want to delete Entity Class '{entityClass['name']}'?\n\nTHIS CANNOT BE UNDONE")
+	if not confirm: return
+
+	for x in AssetManager.GameInfo["entity_classes"]: # Delete entity class
+		if x["id"] == entityClass["id"]:
+			AssetManager.GameInfo["entity_classes"].remove(x)
+			break
+	
+	AssetManager.RemoveFile(f"assets/{md5(str.encode(API_BEHAVIOR_FOR_ENTITY % entityClass['id'])).hexdigest()}.json")
+	AssetManager.RemoveFile(f"assets/{md5(str.encode(API_SPRITE_FOR_ENTITY % (AssetManager.GameInfo['user_id'], AssetManager.GameInfo['id'], entityClass['id']))).hexdigest()}.png")
+
+	for filename in os.listdir(f"{AssetManager.rootPath}/assets"):
+		if filename.startswith(md5(str.encode(API_BEHAVIOR_FOR_ENTITY % entityClass["id"])).hexdigest()):
+			os.remove(f"{AssetManager.rootPath}/assets/{filename}")
+		elif filename.startswith(md5(str.encode(API_SPRITE_FOR_ENTITY % (AssetManager.GameInfo['user_id'], AssetManager.GameInfo['id'], entityClass['id']))).hexdigest()):
+			os.remove(f"{AssetManager.rootPath}/assets/{filename}")
+
+	SetDirty()
+	MenuFileSave()
+	LoadAssetViewEntityClasses()
+	ClearEditView()
 
 def EditGameInfo():
 	gameInfoPath = API_GAME_FETCH % AssetManager.GameInfo["id"]
